@@ -1,6 +1,10 @@
 <%
 require "json"
 
+strip_string = lambda do |value|
+  value.is_a?(String) ? value.strip : value
+end
+
 to_bool = lambda do |value|
   case value
   when true, false

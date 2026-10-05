@@ -163,12 +163,20 @@ def normalize_schema_types(property_type: Any) -> tuple[str, ...]:
     return (normalized,) if normalized else ()
 
 
+def strip_string(value: SchemaValue) -> SchemaValue:
+    """Trim leading/trailing whitespace from string option values."""
+
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
 def stringify_scalar(value: SchemaValue) -> str | None:
     if value is None:
         return None
     if isinstance(value, bool):
         return "true" if value else "false"
-    return str(value)
+    return str(value).strip()
 
 
 def detect_multi_type_text_field(
@@ -244,11 +252,12 @@ def normalize_field(
         return None
 
     widget_type = infer_widget_type(property_schema)
-    default_value = property_schema.get("default")
+    default_value = strip_string(property_schema.get("default"))
 
     multi_type_spec = detect_multi_type_text_field(property_schema)
     if multi_type_spec is not None:
         widget_type, default_value = multi_type_spec
+        default_value = strip_string(default_value)
 
     return FieldSpec(
         original_name=property_name,
@@ -258,7 +267,9 @@ def normalize_field(
         widget_type=widget_type,
         required=property_name in required_fields,
         default_value=default_value,
-        enum_values=tuple(property_schema.get("enum", ())),
+        enum_values=tuple(
+            strip_string(value) for value in property_schema.get("enum", ())
+        ),
     )
 
 
@@ -431,14 +442,18 @@ def render_form(groups: list[GroupSpec], base_form_content: str) -> str:
 
 
 def render_params_entry(field_spec: FieldSpec) -> str:
+    context_value = f"context.{field_spec.normalized_name}"
+
     if field_spec.widget_type == "check_box":
-        value_expression = f"to_bool.call(context.{field_spec.normalized_name})"
+        value_expression = f"to_bool.call(strip_string.call({context_value}))"
     elif field_spec.widget_type == "number_field":
-        value_expression = f"to_number.call(context.{field_spec.normalized_name})"
+        value_expression = f"to_number.call(strip_string.call({context_value}))"
     elif field_spec.widget_type == "mixed_text_field":
-        value_expression = f"to_number_or_bool.call(context.{field_spec.normalized_name})"
+        value_expression = (
+            f"to_number_or_bool.call(strip_string.call({context_value}))"
+        )
     else:
-        value_expression = f"context.{field_spec.normalized_name}"
+        value_expression = f"strip_string.call({context_value})"
 
     return f'    "{field_spec.original_name}": {value_expression}'
 

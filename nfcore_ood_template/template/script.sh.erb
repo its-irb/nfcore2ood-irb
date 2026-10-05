@@ -6,7 +6,7 @@ set -euo pipefail
 # from a non-login shell.
 [[ $(type -t module || true) == "function" ]] && export -f module
 
-workdir="<%= context.workdir %>"
+workdir="<%= context.workdir.to_s.strip %>"
 if [[ -z "${workdir// }" ]]; then
   workdir="${HOME}"
 fi
@@ -16,7 +16,7 @@ cp nf-params.json "$workdir/"
 cd "$workdir"
 
 resume_flag=()
-if [[ "<%= context.resume %>" == "1" ]]; then
+if [[ "<%= context.resume.to_s.strip %>" == "1" ]]; then
   resume_flag+=("-resume")
 fi
 
@@ -61,7 +61,7 @@ rm -f nf-params.json.bak
 
 nextflow_command=(nextflow run "${pipeline_path}" -params-file nf-params.json)
 
-if [[ "<%= context.executor %>" == "slurm" ]]; then
+if [[ "<%= context.executor.to_s.strip %>" == "slurm" ]]; then
   nextflow_command+=("-profile" "${slurm_profile}")
 else
   cat > custom.config <<EOF
@@ -69,8 +69,8 @@ cleanup = true
 
 process {
   resourceLimits = [
-    cpus: <%= context.num_cores %>,
-    memory: "<%= context.num_memory %> GB"
+    cpus: <%= context.num_cores.to_s.strip %>,
+    memory: "<%= context.num_memory.to_s.strip %> GB"
   ]
 }
 EOF
