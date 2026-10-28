@@ -6,9 +6,33 @@ set -euo pipefail
 # from a non-login shell.
 [[ $(type -t module || true) == "function" ]] && export -f module
 
+# The working directory is mandatory and must not be inside the user's home
+# (it is also checked in submit.yml.erb; this is the safety net).
 workdir="<%= context.workdir.to_s.strip %>"
 if [[ -z "${workdir// }" ]]; then
-  workdir="${HOME}"
+  echo "ERROR: the working directory is required." >&2
+  exit 1
+fi
+if [[ "${workdir}" != /* ]]; then
+  echo "ERROR: the working directory must be an absolute path." >&2
+  exit 1
+fi
+workdir_real="$(realpath -m -- "${workdir}")"
+home_real="$(realpath -m -- "${HOME}")"
+if [[ "${workdir_real}" == "${home_real}" || "${workdir_real}" == "${home_real}/"* ]]; then
+  echo "ERROR: the working directory cannot be inside your home directory (${home_real})." >&2
+  exit 1
+fi
+
+# Same rule for the results directory (only absolute paths are checked; a
+# relative outdir lives inside the validated working directory).
+outdir_param="<%= (context.outdir.to_s.strip rescue '') %>"
+if [[ "${outdir_param}" == /* ]]; then
+  outdir_real="$(realpath -m -- "${outdir_param}")"
+  if [[ "${outdir_real}" == "${home_real}" || "${outdir_real}" == "${home_real}/"* ]]; then
+    echo "ERROR: the output directory cannot be inside your home directory (${home_real})." >&2
+    exit 1
+  fi
 fi
 
 mkdir -p "$workdir"
@@ -31,7 +55,6 @@ fi
 module_name="${NF2OOD_MODULE_NAME:-__NF2OOD_MODULE_NAME__}"
 container_module="${NF2OOD_CONTAINER_MODULE:-__NF2OOD_CONTAINER_MODULE__}"
 pipeline_root="${NF2OOD_PIPELINE_ROOT:-__NF2OOD_PIPELINE_ROOT__}"
-singularity_cache="${NF2OOD_SINGULARITY_CACHEDIR:-__NF2OOD_SINGULARITY_CACHEDIR__}"
 slurm_profile="${NF2OOD_SLURM_PROFILE:-__NF2OOD_SLURM_PROFILE__}"
 nextflow_version="<%= context.nextflow_version.to_s.strip %>"
 
@@ -49,10 +72,31 @@ if [[ $(type -t module || true) == "function" ]]; then
   fi
 fi
 
-export NXF_SINGULARITY_CACHEDIR="${singularity_cache}"
+# Partition chosen in the form: the launch job runs on it (see submit.yml.erb)
+# and the irb Nextflow profile sends every task to the same partition.
+export NF_QUEUE="<%= context.auto_queues_cpu %>"
+export SBATCH_PARTITION="${NF_QUEUE}"
+if [[ -z "${NF_QUEUE}" ]]; then
+  echo "ERROR: no partition selected in the form" >&2
+  exit 1
+fi
+
+# Container images are read from the shared library declared in the
+# institutional config (singularity.libraryDir); nothing is cached here.
 pipeline_path="${pipeline_root}/__PIPELINE_NAME__/__PIPELINE_VERSION_PATH__"
 export projectDir="${pipeline_path}"
 export baseDir="${pipeline_path}"
+
+# Nextflow >= 26 has two config parsers (v1 legacy, v2 strict) and each pipeline version
+# works with only one of them. The download step records the right one next to the
+# pipeline code; when the file is missing, the value inherited from the environment is kept.
+parser_file="${pipeline_path%/*}/nxf_syntax_parser"
+if [[ -r "${parser_file}" ]]; then
+  parser_value="$(tr -d '[:space:]' < "${parser_file}")"
+  if [[ "${parser_value}" == "v1" || "${parser_value}" == "v2" ]]; then
+    export NXF_SYNTAX_PARSER="${parser_value}"
+  fi
+fi
 
 # Normalize the rendered parameter file before running Nextflow.
 sed -i.bak -E '/:[[:space:]]*,/d; /"[[:space:]]*"/d' nf-params.json
@@ -61,21 +105,9 @@ rm -f nf-params.json.bak
 
 nextflow_command=(nextflow run "${pipeline_path}" -params-file nf-params.json)
 
-if [[ "<%= context.executor.to_s.strip %>" == "slurm" ]]; then
-  nextflow_command+=("-profile" "${slurm_profile}")
-else
-  cat > custom.config <<EOF
-cleanup = true
-
-process {
-  resourceLimits = [
-    cpus: <%= context.num_cores.to_s.strip %>,
-    memory: "<%= context.num_memory.to_s.strip %> GB"
-  ]
-}
-EOF
-  nextflow_command+=("-profile" "singularity" "-c" "custom.config")
-fi
+# Slurm only: profile "<site profile>,<partition>" (the partition profile must
+# come after the site profile so it overrides the defaults).
+nextflow_command+=("-profile" "${slurm_profile},${NF_QUEUE}" "-c" "${NF2OOD_PROFILE_CONFIG:?NF2OOD_PROFILE_CONFIG is not set; check nf2ood.env}")
 
 nextflow_command+=("${resume_flag[@]}")
 

@@ -27,40 +27,17 @@ __NEXTFLOW_VERSION_FIELD__
 
 __NF2OOD_PARTITION_BLOCK__
 
-  num_cores:
-    label: Number of cores
-    widget: number_field
-    value: 4
-    min: 1
-    step: 1
-    help: CPU count used for single-node local execution.
-
-  num_memory:
-    label: Amount of memory (GB)
-    widget: number_field
-    value: 8
-    min: 1
-    step: 1
-    help: Memory requested for single-node local execution.
-
-  executor:
-    label: Which Nextflow executor should be used?
-    widget: select
-    options:
-      - ["slurm", "slurm", data-hide-partition: true, data-hide-num-cores: true, data-hide-num-memory: true]
-      - ["local", "local"]
-    help: |
-      With `slurm`, the pipeline uses its configured scheduler profile.
-      With `local`, tasks run on the submitted node using a generated config.
-
   workdir:
     label: Working directory
     widget: path_selector
-    required: false
+    required: true
     directory: "__NF2OOD_DEFAULT_DIRECTORY__"
     favorites:
       - "__NF2OOD_DEFAULT_DIRECTORY__"
-    help: Directory where the Nextflow launch should run.
+    help: |
+      Required. Directory where Nextflow runs and where the "work" folder and logs are written.
+      Do NOT use your home directory (/home/...): it is meant for configuration files and small data, not for pipeline results.
+      Use a data or project folder.
 
   resume:
     label: Resume previous run

@@ -1,3 +1,27 @@
+<%-
+  # The working directory is mandatory and must not live in the user's home.
+  wd = workdir.to_s.strip
+  homes = [Dir.home, (File.realpath(Dir.home) rescue Dir.home)].uniq
+  full = File.expand_path(wd)
+  if wd.empty?
+    raise "The working directory is required."
+  elsif !wd.start_with?("/")
+    raise "The working directory must be an absolute path."
+  elsif homes.any? { |h| full == h || full.start_with?(h + "/") }
+    raise "The working directory cannot be inside your home directory (#{homes.first}). Use a data or project folder."
+  end
+
+  # Results must not go to the home either. A relative outdir is resolved
+  # inside the (already validated) working directory, so only absolute paths
+  # are checked. Skipped when the pipeline has no "outdir" field.
+  out = (outdir.to_s.strip rescue '')
+  if out.start_with?("/")
+    full_out = File.expand_path(out)
+    if homes.any? { |h| full_out == h || full_out.start_with?(h + "/") }
+      raise "The output directory cannot be inside your home directory (#{homes.first}). Use a data or project folder."
+    end
+  end
+-%>
 ---
 batch_connect:
   template: "basic"
@@ -14,18 +38,11 @@ script:
     - "<%= bc_num_hours %>:00:00"
     - "--nodes"
     - "1"
-    <%- if executor == "slurm" -%>
+    <%- if auto_queues_cpu.to_s.strip != "" -%>
+    - "-p"
+    - "<%= auto_queues_cpu %>"
+    <%- end -%>
     - "-n"
     - "2"
     - "--mem"
     - "12G"
-    <%- elsif executor == "local" -%>
-    - "-n"
-    - "<%= num_cores %>"
-    - "--mem"
-    - "<%= num_memory %>G"
-    <%- if partition.to_s.strip != "" -%>
-    - "-p"
-    - "<%= partition %>"
-    <%- end -%>
-    <%- end -%>
