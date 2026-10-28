@@ -6,7 +6,7 @@ set -euo pipefail
 # from a non-login shell.
 [[ $(type -t module || true) == "function" ]] && export -f module
 
-# The working directory is mandatory and must not be inside the user's home
+# IRB-03: The working directory is mandatory and must not be inside the user's home
 # (it is also checked in submit.yml.erb; this is the safety net).
 workdir="<%= context.workdir.to_s.strip %>"
 if [[ -z "${workdir// }" ]]; then
@@ -24,7 +24,7 @@ if [[ "${workdir_real}" == "${home_real}" || "${workdir_real}" == "${home_real}/
   exit 1
 fi
 
-# Same rule for the results directory (only absolute paths are checked; a
+# IRB-03: Same rule for the results directory (only absolute paths are checked; a
 # relative outdir lives inside the validated working directory).
 outdir_param="<%= (context.outdir.to_s.strip rescue '') %>"
 if [[ "${outdir_param}" == /* ]]; then
@@ -72,7 +72,7 @@ if [[ $(type -t module || true) == "function" ]]; then
   fi
 fi
 
-# Partition chosen in the form: the launch job runs on it (see submit.yml.erb)
+# IRB-01: Partition chosen in the form: the launch job runs on it (see submit.yml.erb)
 # and the irb Nextflow profile sends every task to the same partition.
 export NF_QUEUE="<%= context.auto_queues_cpu %>"
 export SBATCH_PARTITION="${NF_QUEUE}"
@@ -81,13 +81,13 @@ if [[ -z "${NF_QUEUE}" ]]; then
   exit 1
 fi
 
-# Container images are read from the shared library declared in the
+# IRB-05: Container images are read from the shared library declared in the
 # institutional config (singularity.libraryDir); nothing is cached here.
 pipeline_path="${pipeline_root}/__PIPELINE_NAME__/__PIPELINE_VERSION_PATH__"
 export projectDir="${pipeline_path}"
 export baseDir="${pipeline_path}"
 
-# Nextflow >= 26 has two config parsers (v1 legacy, v2 strict) and each pipeline version
+# IRB-06: Nextflow >= 26 has two config parsers (v1 legacy, v2 strict) and each pipeline version
 # works with only one of them. The download step records the right one next to the
 # pipeline code; when the file is missing, the value inherited from the environment is kept.
 parser_file="${pipeline_path%/*}/nxf_syntax_parser"
@@ -105,7 +105,7 @@ rm -f nf-params.json.bak
 
 nextflow_command=(nextflow run "${pipeline_path}" -params-file nf-params.json)
 
-# Slurm only: profile "<site profile>,<partition>" (the partition profile must
+# IRB-02, IRB-04: Slurm only: profile "<site profile>,<partition>" (the partition profile must
 # come after the site profile so it overrides the defaults).
 nextflow_command+=("-profile" "${slurm_profile},${NF_QUEUE}" "-c" "${NF2OOD_PROFILE_CONFIG:?NF2OOD_PROFILE_CONFIG is not set; check nf2ood.env}")
 

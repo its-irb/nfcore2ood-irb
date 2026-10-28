@@ -1,5 +1,6 @@
 ---
 name: "__PIPELINE_SLUG__ __PIPELINE_VERSION__"
+# IRB-08: category comes from NF2OOD_CATEGORY (nf2ood.env)
 category: "__NF2OOD_CATEGORY__"
 subcategory: "__SUBCATEGORY__"
 role: batch_connect

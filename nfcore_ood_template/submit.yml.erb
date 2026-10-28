@@ -1,5 +1,5 @@
 <%-
-  # The working directory is mandatory and must not live in the user's home.
+  # IRB-03: The working directory is mandatory and must not live in the user's home.
   wd = workdir.to_s.strip
   homes = [Dir.home, (File.realpath(Dir.home) rescue Dir.home)].uniq
   full = File.expand_path(wd)
@@ -11,7 +11,7 @@
     raise "The working directory cannot be inside your home directory (#{homes.first}). Use a data or project folder."
   end
 
-  # Results must not go to the home either. A relative outdir is resolved
+  # IRB-03: Results must not go to the home either. A relative outdir is resolved
   # inside the (already validated) working directory, so only absolute paths
   # are checked. Skipped when the pipeline has no "outdir" field.
   out = (outdir.to_s.strip rescue '')
@@ -38,10 +38,12 @@ script:
     - "<%= bc_num_hours %>:00:00"
     - "--nodes"
     - "1"
+    # IRB-01: the launch job runs on the partition chosen in the form (auto_queues_cpu).
     <%- if auto_queues_cpu.to_s.strip != "" -%>
     - "-p"
     - "<%= auto_queues_cpu %>"
     <%- end -%>
+    # IRB-02: Slurm only, fixed 2 CPUs / 12G: this job only orchestrates Nextflow.
     - "-n"
     - "2"
     - "--mem"

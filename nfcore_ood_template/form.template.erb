@@ -27,6 +27,8 @@ __NEXTFLOW_VERSION_FIELD__
 
 __NF2OOD_PARTITION_BLOCK__
 
+  # IRB-02: no executor, cores or memory fields (Slurm only).
+  # IRB-03: workdir is required and must not be in the home (checked in submit.yml.erb).
   workdir:
     label: Working directory
     widget: path_selector

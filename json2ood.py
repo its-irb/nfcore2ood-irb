@@ -32,6 +32,8 @@ DEFAULT_HIDDEN_PROPERTY_NAMES = {
 
 ALWAYS_INCLUDE_HIDDEN = {"igenomes_base", "igenomes_ignore"}
 PATH_FORMATS = {"file-path", "path", "directory-path"}
+# IRB-01, IRB-02: the partition comes from the OOD dashboard ("auto_queues_cpu");
+# the "executor", "partition", "num_cores" and "num_memory" fields do not exist.
 STATIC_FORM_FIELDS = [
     "bc_num_hours",
     "nextflow_version",
@@ -453,7 +455,7 @@ def render_params_entry(field_spec: FieldSpec) -> str:
             for v in field_spec.enum_values
         )
     ):
-        # Integer/number params with a closed list of choices (e.g. read_length)
+        # IRB-09: Integer/number params with a closed list of choices (e.g. read_length)
         # are rendered as a select but must reach Nextflow as numbers, or schema
         # validation rejects them ('50' is not a valid choice).
         value_expression = f"to_number.call(strip_string.call({context_value}))"

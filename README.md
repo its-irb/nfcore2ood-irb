@@ -1,5 +1,12 @@
 # nf2ood
 
+> **IRB fork (branch `irb`).** This branch is the upstream
+> [TuftsRT/nfcore2ood](https://github.com/TuftsRT/nfcore2ood) plus the changes needed for the
+> IRB Barcelona cluster. Everything we changed is listed in [CHANGES-IRB.md](./CHANGES-IRB.md)
+> and tagged in the code as `IRB-xx` (`grep -rn "IRB-" .`). Parts of this README (local executor
+> mode, partition field, `nf2ood.env.example`) describe upstream and do **not** apply here:
+> see CHANGES-IRB.md. The IRB `nf2ood.env` is **not** the example file: it lives on the cluster.
+
 **Version: 1.4.0** &middot; [CHANGELOG](./CHANGELOG.md)
 
 `nf2ood` generates Open OnDemand batch-connect apps from locally downloaded
