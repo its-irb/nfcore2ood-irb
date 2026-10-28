@@ -448,6 +448,18 @@ def render_params_entry(field_spec: FieldSpec) -> str:
         value_expression = f"to_bool.call(strip_string.call({context_value}))"
     elif field_spec.widget_type == "number_field":
         value_expression = f"to_number.call(strip_string.call({context_value}))"
+    elif (
+        field_spec.widget_type == "select"
+        and field_spec.enum_values
+        and all(
+            isinstance(v, (int, float)) and not isinstance(v, bool)
+            for v in field_spec.enum_values
+        )
+    ):
+        # Integer/number params with a closed list of choices (e.g. read_length)
+        # are rendered as a select but must reach Nextflow as numbers, or schema
+        # validation rejects them ('50' is not a valid choice).
+        value_expression = f"to_number.call(strip_string.call({context_value}))"
     elif field_spec.widget_type == "mixed_text_field":
         value_expression = (
             f"to_number_or_bool.call(strip_string.call({context_value}))"
