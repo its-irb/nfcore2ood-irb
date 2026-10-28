@@ -266,6 +266,7 @@ module_name = sys.argv[1]
 raw_output = os.environ.get("MODULE_OUTPUT", "")
 seen = set()
 versions = []
+defaults = set()   # versions that Lmod marks as the default, "(D)"
 
 for raw_line in raw_output.splitlines():
     line = raw_line.split("(", 1)[0].strip()
@@ -273,7 +274,11 @@ for raw_line in raw_output.splitlines():
     if not match:
         continue
     version = match.group(1).strip()
-    if not version or version in seen:
+    if not version:
+        continue
+    if "(D)" in raw_line:
+        defaults.add(version)
+    if version in seen:
         continue
     seen.add(version)
     versions.append(version)
@@ -288,37 +293,63 @@ def version_key(value: str):
             key.append((1, part.lower()))
     return key
 
+# one version per line, newest first; the Lmod default carries a "<TAB>default" marker
 for version in sorted(versions, key=version_key, reverse=True):
-    print(version)
+    print(version + ("\tdefault" if version in defaults else ""))
 PY
 }
 
 render_nextflow_version_field() {
   local module_name=$1
   local -a versions=()
-  mapfile -t versions < <(discover_nextflow_versions "$module_name")
+  local default_version="" version flag
+
+  if [[ -n "${NF2OOD_NEXTFLOW_VERSIONS:-}" ]]; then
+    # Explicit list from nf2ood.env (space or comma separated), e.g. "26.10.2 26.04.7".
+    # The default is NF2OOD_NEXTFLOW_DEFAULT, or the first one of the list.
+    IFS=', ' read -r -a versions <<< "${NF2OOD_NEXTFLOW_VERSIONS}"
+    default_version="${NF2OOD_NEXTFLOW_DEFAULT:-${versions[0]:-}}"
+  elif [[ -n "$module_name" ]]; then
+    while IFS=$'\t' read -r version flag; do
+      [[ -n "$version" ]] || continue
+      versions+=("$version")
+      [[ "$flag" == "default" ]] && default_version="$version"
+    done < <(discover_nextflow_versions "$module_name")
+    if (( ${#versions[@]} == 0 )); then
+      # Never fall back silently to a free text field: that is easy to miss.
+      die "no Nextflow versions found for module '${module_name}'. Load the module system and make sure the modulefiles are in MODULEPATH (try: module avail ${module_name}), or set NF2OOD_NEXTFLOW_VERSIONS in nf2ood.env."
+    fi
+  fi
 
   if (( ${#versions[@]} > 0 )); then
+    # The preselected version is the one Lmod marks as default (promoted by the cluster
+    # team); if none is marked, or the configured default is not in the list, the newest.
+    local found=0
+    for version in "${versions[@]}"; do [[ "$version" == "$default_version" ]] && found=1; done
+    (( found )) || default_version="${versions[0]}"
+
     printf '%s\n' \
       '  nextflow_version:' \
       '    label: Nextflow version' \
       '    widget: select' \
+      "    value: \"${default_version}\"" \
+      '    required: true' \
       '    options:'
-    local version
     for version in "${versions[@]}"; do
       printf '      - ["%s", "%s"]\n' "$version" "$version"
     done
     printf '%s\n' \
-      '    help: Use an older Nextflow version when running previous nf-core pipeline releases.'
+      '    help: Nextflow version used to run the pipeline. The preselected one is the version approved by the cluster team; change it only if you need to reproduce a previous run.'
     return 0
   fi
 
+  # Only reached when the site explicitly sets NF2OOD_MODULE_NAME="" (no module is loaded)
   printf '%s\n' \
     '  nextflow_version:' \
     '    label: Nextflow version' \
     '    widget: text_field' \
     '    required: false' \
-    '    help: Use an older Nextflow version when running previous nf-core pipeline releases.'
+    '    help: Nextflow version used to run the pipeline (leave empty for the default).'
 }
 
 render_partition_block() {
@@ -384,6 +415,8 @@ customize_generated_app() {
   rendered_cluster="$(config_value NF2OOD_CLUSTER "cluster")"
   rendered_default_directory="$(config_value NF2OOD_DEFAULT_DIRECTORY "$HOME")"
   rendered_env_file="$(config_value NF2OOD_ENV_FILE "")"
+  # OOD menu/dashboard group the app belongs to (manifest.yml "category"). Empty = none.
+  rendered_category="$(config_value NF2OOD_CATEGORY "")"
 
   # Module names use ${var-default} (no colon) so that an explicit empty
   # value in nf2ood.env means "do not load a module for this slot". Sites
@@ -395,7 +428,10 @@ customize_generated_app() {
   rendered_module_name="${NF2OOD_MODULE_NAME-nextflow}"
   rendered_container_module="${NF2OOD_CONTAINER_MODULE-singularity}"
   local rendered_nextflow_version_field
-  rendered_nextflow_version_field="$(render_nextflow_version_field "$rendered_module_name")"
+  # "|| return 1": this function runs inside an "if !", where set -e is ignored, so a failure
+  # (no Nextflow versions found) must be propagated explicitly or the app would be generated
+  # with an empty field. The caller then removes the half-built app and counts it as failed.
+  rendered_nextflow_version_field="$(render_nextflow_version_field "$rendered_module_name")" || return 1
 
   # Build the --set TOKEN=VALUE arglist once and apply all substitutions in a
   # single Python pass over the small set of files in the app dir.
@@ -409,6 +445,7 @@ customize_generated_app() {
     --set "__PIPELINE_REPOSITORY_URL__=https://github.com/nf-core/${pipeline_slug}"
     --set "__APP_SLUG__=${app_slug}"
     --set "__SUBCATEGORY__=${subcategory}"
+    --set "__NF2OOD_CATEGORY__=${rendered_category}"
     --set "__NF2OOD_CLUSTER__=${rendered_cluster}"
     --set "__NF2OOD_DEFAULT_DIRECTORY__=${rendered_default_directory}"
     --set "__NF2OOD_PARTITION_BLOCK__=${rendered_partition_block}"
